@@ -22,6 +22,8 @@ df.benefit <- readRDS("BenefitsByDept.RDS")
 plot.year <- function(df.year, year){
   df.year.long <- df.year %>%
     filter(Year == year) %>%
+    select(`Year`, `Base Pay`, `Overtime Pay`, `Permanent Bonus Pay`, `Longevity Bonus Pay`, 
+           `Temporary Bonus Pay`, `Lump Sum Pay`, `Other Pay & Adjustments`) %>%
     melt(id.vars = "Year")
   colnames(df.year.long) <- c("Year", "Payment", "Amount")
   ggplotly(ggplot(data = df.year.long, aes(x=Year, y=Amount, fill=Payment)) +
@@ -46,6 +48,16 @@ plot.individual <- function(df.individual, year, n) {
              scale_x_discrete(limits = rev(levels(df.individual.long$ID))) + xlab(NULL))
 }
 
+# function to display a data table for individuals
+table.individual <- function(df.individual, year, n) {
+  table.df <- df.individual %>%
+    filter(Year == year) %>%
+    select(ID, Total, `Base Pay`, `Overtime Pay`, `Other Pay`) %>%
+    slice(1:n)
+  colnames(table.df) <- c("Title-Department", "Total", "Base Pay", "Overtime Pay", "Other Pay")
+  return(table.df)
+}
+
 # function to plot bar plots for departments
 plot.dept <- function(df.dept, year, n) {
   df.dept.long <- df.dept %>%
@@ -61,6 +73,16 @@ plot.dept <- function(df.dept, year, n) {
   ggplotly(ggplot(data = df.dept.long, aes(x=ID, y=Amount, fill=Payment)) +
              geom_bar(stat="identity") + coord_flip() +
              scale_x_discrete(limits = rev(levels(df.dept.long$ID))) + xlab(NULL))
+}
+
+# function to display a data table for individuals
+table.dept <- function(df.dept, year, n) {
+  table.df <- df.dept %>%
+    filter(Year == year) %>%
+    select(Department, Total, `Base Pay`, `Overtime Pay`, `Other Pay`) %>%
+    slice(1:n)
+  colnames(table.df) <- c("Department", "Total", "Base Pay", "Overtime Pay", "Other Pay")
+  return(table.df)
 }
 
 # function to plot median box plots for departments
@@ -119,12 +141,14 @@ ui <- dashboardPage(
   ),
   dashboardBody(
     tabItems(
-      
+
       # first tab: total payroll
       tabItem(tabName = "total",
               tabsetPanel(
                 tabPanel("Overview",
                          plotlyOutput("plotOverview")),
+                tabPanel("Data Table",
+                         dataTableOutput("tableYear")),
                 tabPanel("2013",
                          plotlyOutput("plot2013")),
                 tabPanel("2014",
@@ -158,7 +182,14 @@ ui <- dashboardPage(
                 ),
                 column(9,
                        box(width = NULL, solidHeader = TRUE,
-                           plotlyOutput("plotIndividual")
+                           tabsetPanel(
+                             tabPanel("Bar Plot",
+                               plotlyOutput("plotIndividual")
+                             ),
+                             tabPanel("Data Table",
+                               dataTableOutput("tableIndividual")
+                             )
+                           )
                        )
                 )
               )
@@ -181,6 +212,7 @@ ui <- dashboardPage(
                                        choices = c("Mean",
                                                    "Median"),
                                        selected = "Median"),
+                           helpText("Note: Mean refers to 95% confidence intervals for means."),
                            numericInput("deptNum", h3("Number of Top Earning Departments"), 
                                         value = 5))
                 ),
@@ -190,7 +222,9 @@ ui <- dashboardPage(
                              tabPanel("Mean/Median Box Plot",
                                       plotlyOutput("plotDeptBox")),
                              tabPanel("Aggregate Bar Charts",
-                                      plotlyOutput("plotDept"))
+                                      plotlyOutput("plotDept")),
+                             tabPanel("Data Table",
+                                      dataTableOutput("tableDept"))
                            )
                        )
                 )
@@ -233,6 +267,7 @@ server <- function(input, output) {
                geom_bar(stat="identity") +
                scale_x_continuous(breaks = Year))
   })
+  output$tableYear <- renderDataTable(df.year)
   output$plot2013 <- renderPlotly({
     plot.year(df.year, 2013)
   })
@@ -256,6 +291,7 @@ server <- function(input, output) {
   output$plotIndividual <- renderPlotly({
     plot.individual(df.individual, input$individualYear, input$individualNum)
   })
+  output$tableIndividual <- renderDataTable(table.individual(df.individual, input$individualYear, input$individualNum))
   
   # tab 3
   output$plotDeptBox <- renderPlotly({
@@ -268,6 +304,7 @@ server <- function(input, output) {
   output$plotDept <- renderPlotly({
     plot.dept(df.dept, input$deptYear, input$deptNum)
   })
+  output$tableDept <- renderDataTable(table.dept(df.dept, input$deptYear, input$deptNum))
   
   # tab 4
   output$plotBenefit <- renderPlotly({
